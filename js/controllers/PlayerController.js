@@ -22,6 +22,8 @@ export class PlayerController {
     this.lastTouchY = 0;
     this.touchSensitivity = 1.0; // Adjust this value to make camera more/less sensitive
     this.isTouchActive = false;
+    // Add a touch area flag to distinguish between joystick and camera areas
+    this.touchIsRightSide = false;
   }
 
   init() {
@@ -107,10 +109,22 @@ export class PlayerController {
       e.preventDefault();
       
       // Store initial touch position for calculating swipe movement
-      if (e.touches.length === 1) {
-        this.lastTouchX = e.touches[0].clientX;
-        this.lastTouchY = e.touches[0].clientY;
-        this.isTouchActive = true;
+      if (e.touches.length >= 1) {
+        // Find the rightmost touch that isn't on the left third of the screen
+        // This allows the joystick (usually on left side) to work simultaneously
+        for (let i = 0; i < e.touches.length; i++) {
+          const touch = e.touches[i];
+          const touchX = touch.clientX;
+          
+          // Consider touch to be for camera control if it's on the right 2/3 of screen
+          if (touchX > gameCanvas.clientWidth / 3) {
+            this.lastTouchX = touchX;
+            this.lastTouchY = touch.clientY;
+            this.isTouchActive = true;
+            this.touchIsRightSide = true;
+            break;
+          }
+        }
       }
     }, { passive: false });
 
@@ -118,26 +132,56 @@ export class PlayerController {
       // Prevent default to stop scrolling
       e.preventDefault();
       
-      // Only handle single touch for camera movement
-      if (e.touches.length === 1 && this.isTouchActive) {
-        const touchX = e.touches[0].clientX;
-        const touchY = e.touches[0].clientY;
+      // Look for the right-side touch that controls the camera
+      if (this.isTouchActive && this.touchIsRightSide) {
+        let foundActiveTouch = false;
         
-        // Calculate movement deltas
-        const movementX = (touchX - this.lastTouchX) * this.touchSensitivity;
-        const movementY = (touchY - this.lastTouchY) * this.touchSensitivity;
+        // Find the correct touch point (the one on the right side)
+        for (let i = 0; i < e.touches.length; i++) {
+          const touch = e.touches[i];
+          const touchX = touch.clientX;
+          
+          // Only process touches on the right 2/3 of screen
+          if (touchX > gameCanvas.clientWidth / 3) {
+            // Calculate movement deltas
+            const movementX = (touchX - this.lastTouchX) * this.touchSensitivity * 2.5; // Increased sensitivity
+            const movementY = (touch.clientY - this.lastTouchY) * this.touchSensitivity * 2.5; // Increased sensitivity
+            
+            // Update camera based on touch movement
+            this.firstPersonControls.update(movementX, movementY, true);
+            
+            // Store current touch position for next move event
+            this.lastTouchX = touchX;
+            this.lastTouchY = touch.clientY;
+            foundActiveTouch = true;
+            break;
+          }
+        }
         
-        // Update camera based on touch movement
-        this.firstPersonControls.update(movementX, movementY, true);
-        
-        // Store current touch position for next move event
-        this.lastTouchX = touchX;
-        this.lastTouchY = touchY;
+        // If we didn't find the active touch, it may have moved to the left side or been removed
+        if (!foundActiveTouch) {
+          this.isTouchActive = false;
+          this.touchIsRightSide = false;
+        }
       }
     }, { passive: false });
 
     gameCanvas.addEventListener('touchend', (e) => {
-      this.isTouchActive = false;
+      // Check if there are any remaining touches on the right side
+      let rightSideTouchFound = false;
+      
+      for (let i = 0; i < e.touches.length; i++) {
+        if (e.touches[i].clientX > gameCanvas.clientWidth / 3) {
+          rightSideTouchFound = true;
+          break;
+        }
+      }
+      
+      // If no more touches on right side, deactivate camera control
+      if (!rightSideTouchFound) {
+        this.isTouchActive = false;
+        this.touchIsRightSide = false;
+      }
     });
     
     // Make sure controls stay updated

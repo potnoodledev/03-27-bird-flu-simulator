@@ -92,6 +92,12 @@ export class MainScene extends Scene3D {
     const barnHeight = 20;  // Y direction
     const wallThickness = 1;
     
+    // Define barn colors from the image
+    const barnWallColor = 0x8b20a0; // Purple/magenta color
+    const barnFloorColor = 0x965c3c; // Brown wooden floor color
+    const barnRoofColor = 0x6a1880; // Darker purple for roof
+    const barnDoorColor = 0x7d2090; // Slightly different purple for doors
+    
     // Create barn floor
     const floor = this.third.physics.add.ground({ 
       width: barnWidth, 
@@ -102,7 +108,7 @@ export class MainScene extends Scene3D {
     
     // Apply barn floor texture
     if (floor.material) {
-      floor.material.color.setHex(0x965c3c); // Brown wooden floor color
+      floor.material.color.setHex(barnFloorColor);
     }
     
     // Create barn walls and ceiling - all non-destructible
@@ -117,7 +123,7 @@ export class MainScene extends Scene3D {
       z: 0,
       name: 'wall',
       userData: { destructible: false }
-    }, { lambert: { color: 0xbb4400 } });  // Reddish barn color
+    }, { lambert: { color: barnWallColor } });
     
     // Right wall (along z-axis)
     const rightWall = this.third.physics.add.box({
@@ -129,7 +135,7 @@ export class MainScene extends Scene3D {
       z: 0,
       name: 'wall',
       userData: { destructible: false }
-    }, { lambert: { color: 0xbb4400 } });
+    }, { lambert: { color: barnWallColor } });
     
     // Back wall (along x-axis)
     const backWall = this.third.physics.add.box({
@@ -141,7 +147,7 @@ export class MainScene extends Scene3D {
       z: -barnLength/2,
       name: 'wall',
       userData: { destructible: false }
-    }, { lambert: { color: 0xbb4400 } });
+    }, { lambert: { color: barnWallColor } });
     
     // Front wall (along x-axis) - with a door opening
     const frontWallLeft = this.third.physics.add.box({
@@ -153,7 +159,7 @@ export class MainScene extends Scene3D {
       z: barnLength/2,
       name: 'wall',
       userData: { destructible: false }
-    }, { lambert: { color: 0xbb4400 } });
+    }, { lambert: { color: barnWallColor } });
     
     const frontWallRight = this.third.physics.add.box({
       width: barnWidth/2 - 4, // Leave space for door
@@ -164,7 +170,7 @@ export class MainScene extends Scene3D {
       z: barnLength/2,
       name: 'wall',
       userData: { destructible: false }
-    }, { lambert: { color: 0xbb4400 } });
+    }, { lambert: { color: barnWallColor } });
     
     // Top door beam
     const doorTop = this.third.physics.add.box({
@@ -176,35 +182,206 @@ export class MainScene extends Scene3D {
       z: barnLength/2,
       name: 'wall',
       userData: { destructible: false }
-    }, { lambert: { color: 0xbb4400 } });
+    }, { lambert: { color: barnWallColor } });
     
-    // Ceiling/roof (triangular shape created with multiple boxes)
-    const ceiling = this.third.physics.add.box({
-      width: barnWidth,
-      height: wallThickness,
+    // Add closed barn doors
+    const leftDoor = this.third.physics.add.box({
+      width: 4,
+      height: barnHeight - 2,
+      depth: wallThickness/2,
+      x: -2,
+      y: (barnHeight - 2)/2,
+      z: barnLength/2 + 0.2,
+      name: 'door',
+      userData: { destructible: false }
+    }, { lambert: { color: barnDoorColor } });
+    
+    const rightDoor = this.third.physics.add.box({
+      width: 4,
+      height: barnHeight - 2,
+      depth: wallThickness/2,
+      x: 2,
+      y: (barnHeight - 2)/2,
+      z: barnLength/2 + 0.2,
+      name: 'door',
+      userData: { destructible: false }
+    }, { lambert: { color: barnDoorColor } });
+    
+    // Create triangular roof structure
+    // Middle peak
+    const roofPeak = this.third.physics.add.box({
+      width: wallThickness,
+      height: 8, // Height of the peak
       depth: barnLength,
       x: 0,
+      y: barnHeight + 4, // Position at the peak
+      z: 0,
+      name: 'roofPeak',
+      userData: { destructible: false }
+    }, { lambert: { color: barnRoofColor } });
+    
+    // Left slope
+    const leftRoofSlope = this.third.physics.add.box({
+      width: barnWidth/2,
+      height: 1,
+      depth: barnLength,
+      x: -barnWidth/4,
       y: barnHeight,
       z: 0,
-      name: 'ceiling',
+      name: 'roof',
       userData: { destructible: false }
-    }, { lambert: { color: 0x7d3e11 } });  // Darker wood for ceiling
+    }, { lambert: { color: barnRoofColor } });
     
-    // Set all walls to be static
-    [leftWall, rightWall, backWall, frontWallLeft, frontWallRight, doorTop, ceiling].forEach(wall => {
+    // Apply rotation to left slope to create triangular shape
+    leftRoofSlope.rotation.z = Math.PI * 0.12;
+    
+    // Right slope
+    const rightRoofSlope = this.third.physics.add.box({
+      width: barnWidth/2,
+      height: 1,
+      depth: barnLength,
+      x: barnWidth/4,
+      y: barnHeight,
+      z: 0,
+      name: 'roof',
+      userData: { destructible: false }
+    }, { lambert: { color: barnRoofColor } });
+    
+    // Apply rotation to right slope (opposite direction)
+    rightRoofSlope.rotation.z = -Math.PI * 0.12;
+    
+    // Add hanging barn lights as seen in the image
+    this.addBarnLights(barnHeight, barnWidth, barnLength);
+    
+    // Set all barn elements to be static
+    [leftWall, rightWall, backWall, frontWallLeft, frontWallRight, doorTop, 
+     leftDoor, rightDoor, roofPeak, leftRoofSlope, rightRoofSlope].forEach(wall => {
       if (wall.body) {
         wall.body.setCollisionFlags(2); // Set as kinematic object (static)
       }
     });
     
-    // Add some lighting to the barn
+    // Add some ambient lighting to the barn
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     this.third.scene.add(ambientLight);
     
-    // Add directional light to simulate sunlight through windows
+    // Add directional light to simulate light entering through windows/gaps
     const directionalLight = new THREE.DirectionalLight(0xffffcc, 1);
     directionalLight.position.set(0, 20, 0);
     this.third.scene.add(directionalLight);
+  }
+  
+  // Add function to create the hanging barn lights
+  addBarnLights(barnHeight, barnWidth, barnLength) {
+    // Hanging light color
+    const lightColor = 0x2a0060; // Dark purple for the lamp shade
+    const lightIntensity = 0.7;
+    
+    // Create hanging lights across the barn ceiling
+    const lightPositions = [
+      { x: -barnWidth/3, y: barnHeight - 2, z: -barnLength/3 },
+      { x: barnWidth/3, y: barnHeight - 2, z: -barnLength/3 },
+      { x: -barnWidth/3, y: barnHeight - 2, z: 0 },
+      { x: barnWidth/3, y: barnHeight - 2, z: 0 },
+      { x: -barnWidth/3, y: barnHeight - 2, z: barnLength/3 },
+      { x: barnWidth/3, y: barnHeight - 2, z: barnLength/3 },
+      { x: 0, y: barnHeight - 2, z: -barnLength/4 },
+      { x: 0, y: barnHeight - 2, z: barnLength/4 }
+    ];
+    
+    // Create each hanging light
+    lightPositions.forEach(pos => {
+      // Create the hanging wire
+      const wire = this.third.physics.add.box({
+        width: 0.2,
+        height: 9,
+        depth: 0.2,
+        x: pos.x,
+        y: pos.y + 1.5,
+        z: pos.z,
+        name: 'lightWire',
+        userData: { destructible: false }
+      }, { lambert: { color: 0x000000 } });
+      
+      // Create dome-shaped lamp shade
+      const lampShape = new THREE.SphereGeometry(2, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+      const lampMaterial = new THREE.MeshLambertMaterial({ color: lightColor });
+      const lampShade = new THREE.Mesh(lampShape, lampMaterial);
+      
+      lampShade.position.set(pos.x, pos.y - 4, pos.z);
+      lampShade.rotation.y = Math.PI; // Flip it to create a hanging dome
+      this.third.scene.add(lampShade);
+      
+      // Add a point light inside each lamp
+      const light = new THREE.PointLight(0xaa60dd, lightIntensity, 15);
+      light.position.set(pos.x, pos.y - 0.5, pos.z);
+      this.third.scene.add(light);
+      
+      // Add subtle light flickering animation
+      this.tweens.add({
+        targets: { intensity: lightIntensity },
+        intensity: lightIntensity - 0.2,
+        duration: 1500 + Math.random() * 1000,
+        ease: 'Sine.easeInOut',
+        yoyo: true,
+        repeat: -1,
+        onUpdate: (tween, target) => {
+          light.intensity = target.intensity;
+        }
+      });
+      
+      // Set wire as static
+      if (wire.body) {
+        wire.body.setCollisionFlags(2);
+      }
+    });
+    
+    // Add atmospheric light beams and dust particles
+    this.addAtmosphericEffects(barnHeight, barnWidth, barnLength);
+  }
+  
+  // Add atmospheric light beams and dust particles
+  addAtmosphericEffects(barnHeight, barnWidth, barnLength) {
+    // Add fog to the scene for a more atmospheric feel
+    this.third.scene.fog = new THREE.FogExp2(0x8b20a0, 0.015);
+    
+    // Add a volumetric light effect (simulated with planes)
+    const lightRayGeometry = new THREE.PlaneGeometry(5, 20);
+    const lightRayMaterial = new THREE.MeshBasicMaterial({
+      color: 0xaa60dd,
+      transparent: true,
+      opacity: 0.2,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending
+    });
+    
+    // Create light rays at different positions
+    const rayPositions = [
+      { x: -barnWidth/4, y: barnHeight/2, z: -barnLength/4, rotation: 0.2 },
+      { x: barnWidth/4, y: barnHeight/2, z: barnLength/4, rotation: -0.3 },
+      { x: 0, y: barnHeight/2, z: 0, rotation: 0.1 }
+    ];
+    
+    rayPositions.forEach(pos => {
+      const lightRay = new THREE.Mesh(lightRayGeometry, lightRayMaterial);
+      lightRay.position.set(pos.x, pos.y, pos.z);
+      lightRay.rotation.y = pos.rotation;
+      lightRay.rotation.x = Math.PI / 2;
+      this.third.scene.add(lightRay);
+      
+      // Add slight movement animation
+      this.tweens.add({
+        targets: { opacity: 0.2 },
+        opacity: 0.3,
+        duration: 3000 + Math.random() * 2000,
+        ease: 'Sine.easeInOut',
+        yoyo: true,
+        repeat: -1,
+        onUpdate: (tween, target) => {
+          lightRayMaterial.opacity = target.opacity;
+        }
+      });
+    });
   }
   
   setupMinimap() {
@@ -322,6 +499,47 @@ export class MainScene extends Scene3D {
       if (this.chickensRemainingText) {
         const remainingChickens = this.chickenManager.getRemainingCount();
         this.chickensRemainingText.setText(`Chickens: ${remainingChickens}`);
+      }
+      
+      // Check for nearby chickens to show focus message
+      this.checkNearbyChickens();
+    }
+  }
+  
+  // Add method to check for nearby chickens and show focus message
+  checkNearbyChickens() {
+    // Only run every 60 frames to avoid constant checking
+    if (this.frameCount % 60 !== 0) return;
+    
+    // Get player position from camera
+    const playerPos = this.third.camera.position.clone();
+    
+    // Get all live chickens
+    const chickens = this.chickenManager.getChickens().filter(chicken => 
+      chicken.body && !chicken.body.isDestroyed);
+    
+    // Find closest chicken
+    let closestChicken = null;
+    let closestDistance = Infinity;
+    
+    chickens.forEach(chicken => {
+      const distance = playerPos.distanceTo(chicken.position);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestChicken = chicken;
+      }
+    });
+    
+    // If a chicken is nearby (within 10 units), show the focus message
+    if (closestChicken && closestDistance < 10) {
+      // Only show message occasionally to avoid spam
+      if (Math.random() < 0.3 && window.showFocusMessage) {
+        const focusTextElement = document.getElementById('focus-text');
+        if (focusTextElement) {
+          focusTextElement.textContent = closestDistance < 5 ? 
+            "Focus on target!" : "Chicken detected nearby";
+        }
+        window.showFocusMessage();
       }
     }
   }
