@@ -8,9 +8,9 @@
     />
     <meta http-equiv="X-UA-Compatible" content="ie=edge" />
     <title>First Person Shooter</title>
-    <link rel="stylesheet" href="/css/examples.css?ver=1.0.0" />
-    <script src="/lib/phaser.min.js?ver=3.52.0"></script>
-    <script src="/lib/enable3d/enable3d.phaserExtension.0.25.4.min.js"></script>
+    <link rel="stylesheet" href="css/examples.css?ver=1.0.0" />
+    <script src="lib/phaser.min.js?ver=3.52.0"></script>
+    <script src="lib/enable3d/enable3d.phaserExtension.0.25.4.min.js"></script>
   </head>
 
   <body>
@@ -61,7 +61,7 @@
             this.postRender()
           })
 
-          this.third.load.gltf('/assets/glb/chicken.glb').then(object => {
+          this.third.load.gltf('assets/glb/chicken.glb').then(object => {
             const rifle = object.scene
 
             this.rifle = new ExtendedObject3D()
@@ -363,16 +363,13 @@
         scale: {
           mode: Phaser.Scale.FIT,
           autoCenter: Phaser.Scale.CENTER_BOTH,
-          width: window.innerWidth,
-          height: window.innerHeight
+          width: window.innerWidth * Math.max(1, window.devicePixelRatio / 2),
+          height: window.innerHeight * Math.max(1, window.devicePixelRatio / 2)
         },
-        scene: [MainScene],
-        ...Canvas({ antialias: true })
+        scene: [MainScene]
       }
 
-      window.addEventListener('load', () => {
-        enable3d(() => new Phaser.Game(config)).withPhysics('/lib/ammo/kripken')
-      })
+      enable3d(() => new Phaser.Game(config)).withPhysics('lib/ammo/kripken')
     </script>
   </body>
 </html>
