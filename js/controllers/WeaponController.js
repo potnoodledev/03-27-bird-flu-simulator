@@ -81,8 +81,22 @@ export class WeaponController {
     
     // Add collision detection to the bullet
     sphere.body.on.collision((otherObject, event) => {
-      if (otherObject.name !== 'ground' && otherObject.name !== 'rifle') {
-        // Destroy the hit object
+      if (otherObject.name !== 'rifle') {
+        // If it hit a wall, ceiling or ground - just destroy bullet
+        if (otherObject.name === 'ground' || otherObject.name === 'wall' || otherObject.name === 'ceiling') {
+          // Destroy the bullet
+          this.scene.third.scene.remove(sphere);
+          this.scene.third.physics.destroy(sphere);
+          
+          // Remove bullet from the array
+          const index = this.bullets.indexOf(sphere);
+          if (index > -1) {
+            this.bullets.splice(index, 1);
+          }
+          return;
+        }
+        
+        // Destroy the hit object if destructible
         if (otherObject.userData.destructible !== false) {
           // Check if it's a chicken
           if (otherObject.name.includes('chicken')) {

@@ -49,7 +49,7 @@ export class MainScene extends Scene3D {
     this.deviceController.setupDeviceSpecificUI();
     
     // Initialize controllers
-    this.setupMinimap();
+    // this.setupMinimap();
     this.setupUI();
     
     // Initialize player
@@ -73,13 +73,8 @@ export class MainScene extends Scene3D {
       this.chickenManager.loadChickens(modelObject);
     });
     
-    // Mark ground as non-destructible
-    this.third.physics.add.ground({ 
-      width: 50, 
-      height: 50, 
-      name: 'ground', 
-      userData: { destructible: false } 
-    });
+    // Create a barn structure instead of a simple ground
+    this.createBarnStructure();
     
     // Make game respond to window resizing
     window.addEventListener('resize', () => this.deviceController.handleResize());
@@ -90,13 +85,144 @@ export class MainScene extends Scene3D {
     });
   }
   
+  createBarnStructure() {
+    // Define barn dimensions - longer instead of wide
+    const barnLength = 80;  // Z direction
+    const barnWidth = 40;   // X direction
+    const barnHeight = 20;  // Y direction
+    const wallThickness = 1;
+    
+    // Create barn floor
+    const floor = this.third.physics.add.ground({ 
+      width: barnWidth, 
+      height: barnLength,  // Using height parameter for length (z-direction)
+      name: 'ground', 
+      userData: { destructible: false }
+    });
+    
+    // Apply barn floor texture
+    if (floor.material) {
+      floor.material.color.setHex(0x965c3c); // Brown wooden floor color
+    }
+    
+    // Create barn walls and ceiling - all non-destructible
+    
+    // Left wall (along z-axis)
+    const leftWall = this.third.physics.add.box({
+      width: wallThickness,
+      height: barnHeight,
+      depth: barnLength,
+      x: -barnWidth/2,
+      y: barnHeight/2,
+      z: 0,
+      name: 'wall',
+      userData: { destructible: false }
+    }, { lambert: { color: 0xbb4400 } });  // Reddish barn color
+    
+    // Right wall (along z-axis)
+    const rightWall = this.third.physics.add.box({
+      width: wallThickness,
+      height: barnHeight,
+      depth: barnLength,
+      x: barnWidth/2,
+      y: barnHeight/2,
+      z: 0,
+      name: 'wall',
+      userData: { destructible: false }
+    }, { lambert: { color: 0xbb4400 } });
+    
+    // Back wall (along x-axis)
+    const backWall = this.third.physics.add.box({
+      width: barnWidth,
+      height: barnHeight,
+      depth: wallThickness,
+      x: 0,
+      y: barnHeight/2,
+      z: -barnLength/2,
+      name: 'wall',
+      userData: { destructible: false }
+    }, { lambert: { color: 0xbb4400 } });
+    
+    // Front wall (along x-axis) - with a door opening
+    const frontWallLeft = this.third.physics.add.box({
+      width: barnWidth/2 - 4, // Leave space for door
+      height: barnHeight,
+      depth: wallThickness,
+      x: -barnWidth/4 - 2,
+      y: barnHeight/2,
+      z: barnLength/2,
+      name: 'wall',
+      userData: { destructible: false }
+    }, { lambert: { color: 0xbb4400 } });
+    
+    const frontWallRight = this.third.physics.add.box({
+      width: barnWidth/2 - 4, // Leave space for door
+      height: barnHeight,
+      depth: wallThickness,
+      x: barnWidth/4 + 2,
+      y: barnHeight/2,
+      z: barnLength/2,
+      name: 'wall',
+      userData: { destructible: false }
+    }, { lambert: { color: 0xbb4400 } });
+    
+    // Top door beam
+    const doorTop = this.third.physics.add.box({
+      width: 8,
+      height: 2,
+      depth: wallThickness,
+      x: 0,
+      y: barnHeight - 2,
+      z: barnLength/2,
+      name: 'wall',
+      userData: { destructible: false }
+    }, { lambert: { color: 0xbb4400 } });
+    
+    // Ceiling/roof (triangular shape created with multiple boxes)
+    const ceiling = this.third.physics.add.box({
+      width: barnWidth,
+      height: wallThickness,
+      depth: barnLength,
+      x: 0,
+      y: barnHeight,
+      z: 0,
+      name: 'ceiling',
+      userData: { destructible: false }
+    }, { lambert: { color: 0x7d3e11 } });  // Darker wood for ceiling
+    
+    // Set all walls to be static
+    [leftWall, rightWall, backWall, frontWallLeft, frontWallRight, doorTop, ceiling].forEach(wall => {
+      if (wall.body) {
+        wall.body.setCollisionFlags(2); // Set as kinematic object (static)
+      }
+    });
+    
+    // Add some lighting to the barn
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    this.third.scene.add(ambientLight);
+    
+    // Add directional light to simulate sunlight through windows
+    const directionalLight = new THREE.DirectionalLight(0xffffcc, 1);
+    directionalLight.position.set(0, 20, 0);
+    this.third.scene.add(directionalLight);
+  }
+  
   setupMinimap() {
     // Create second camera for minimap
     this.secondCamera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
     this.third.add.existing(this.secondCamera);
     this.third.camera.add(this.secondCamera);
-    this.secondCamera.position.set(0, 15, 0); // Set position above player
+    
+    // Position the minimap camera higher to capture the entire barn length
+    this.secondCamera.position.set(0, 50, 0); // Higher position
     this.secondCamera.lookAt(0, 0, 0); // Look down at scene
+    
+    // Add a directional light for the minimap view to ensure visibility
+    const minimapLight = new THREE.DirectionalLight(0xffffff, 1);
+    minimapLight.position.set(0, 50, 0);
+    minimapLight.target.position.set(0, 0, 0);
+    this.third.scene.add(minimapLight);
+    this.third.scene.add(minimapLight.target);
   }
   
   setupUI() {
@@ -144,22 +270,22 @@ export class MainScene extends Scene3D {
     this.third.renderer.clearDepth();
 
     // Minimap render
-    this.third.renderer.setScissorTest(true);
-    this.third.renderer.setScissor(
-      minimapX, 
-      minimapY + safeAreaTop, 
-      minimapSize, 
-      minimapSize * 0.75
-    );
-    this.third.renderer.setViewport(
-      minimapX, 
-      minimapY + safeAreaTop, 
-      minimapSize, 
-      minimapSize * 0.75
-    );
+    // this.third.renderer.setScissorTest(true);
+    // this.third.renderer.setScissor(
+    //   minimapX, 
+    //   minimapY + safeAreaTop, 
+    //   minimapSize, 
+    //   minimapSize * 0.75
+    // );
+    // this.third.renderer.setViewport(
+    //   minimapX, 
+    //   minimapY + safeAreaTop, 
+    //   minimapSize, 
+    //   minimapSize * 0.75
+    // );
 
-    this.third.renderer.render(this.third.scene, this.secondCamera);
-    this.third.renderer.setScissorTest(false);
+    // this.third.renderer.render(this.third.scene, this.secondCamera);
+    // this.third.renderer.setScissorTest(false);
   }
 
   update(time, delta) {

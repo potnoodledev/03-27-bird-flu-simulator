@@ -15,12 +15,22 @@ export class PlayerController {
     this.mobileController = null;
     this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     this.playerPosition = document.getElementById('player-position');
+    this.cameraDirection = document.getElementById('camera-direction');
+    this.cameraRotation = document.getElementById('camera-rotation');
+    // Touch control variables
+    this.lastTouchX = 0;
+    this.lastTouchY = 0;
+    this.touchSensitivity = 1.0; // Adjust this value to make camera more/less sensitive
+    this.isTouchActive = false;
   }
 
   init() {
     // Add player
     this.player = new ExtendedObject3D();
-    this.player.position.setY(2);
+    
+    // Position player at the other end of the barn
+    // The barn is 80 units long in Z direction with the entrance at the +Z side
+    this.player.position.set(0, 2, -40); // At the opposite end of the barn from the entrance
     this.scene.third.add.existing(this.player);
     
     // Add first person controls with explicit update option
@@ -28,10 +38,32 @@ export class PlayerController {
       pointerLock: !this.isMobile,
       enableZoom: false
     });
-
+    
+    // Position camera at player position
+    this.scene.third.camera.position.copy(this.player.position);
+    
+    // Set player's initial rotation to face toward the entrance
+    this.player.rotation.y = 0; // Now facing +Z direction (toward entrance)
+    
+    // Force camera to look toward the entrance
+    this.scene.third.camera.rotation.y = 0; // Look toward +Z direction
+    
+    // Force the camera update
+    this.firstPersonControls.update(0, 0, true);
+    
+    // Double-check that camera is facing the right direction after everything is initialized
+    if (this.scene.events) {
+      this.scene.events.once('update', () => {
+        this.scene.third.camera.rotation.y = 0;
+        this.firstPersonControls.update(0, 0, true);
+      });
+    }
+    
     // Setup control method based on device
     if (!this.isMobile) {
       this.setupDesktopControls();
+    } else {
+      this.setupMobileControls();
     }
     
     // Add keyboard keys for desktop
@@ -65,6 +97,55 @@ export class PlayerController {
     });
   }
 
+  setupMobileControls() {
+    // Use Phaser's touch events for camera control
+    const gameCanvas = this.scene.sys.game.canvas;
+    
+    // Set up touch events for camera rotation
+    gameCanvas.addEventListener('touchstart', (e) => {
+      // Prevent default to stop scrolling
+      e.preventDefault();
+      
+      // Store initial touch position for calculating swipe movement
+      if (e.touches.length === 1) {
+        this.lastTouchX = e.touches[0].clientX;
+        this.lastTouchY = e.touches[0].clientY;
+        this.isTouchActive = true;
+      }
+    }, { passive: false });
+
+    gameCanvas.addEventListener('touchmove', (e) => {
+      // Prevent default to stop scrolling
+      e.preventDefault();
+      
+      // Only handle single touch for camera movement
+      if (e.touches.length === 1 && this.isTouchActive) {
+        const touchX = e.touches[0].clientX;
+        const touchY = e.touches[0].clientY;
+        
+        // Calculate movement deltas
+        const movementX = (touchX - this.lastTouchX) * this.touchSensitivity;
+        const movementY = (touchY - this.lastTouchY) * this.touchSensitivity;
+        
+        // Update camera based on touch movement
+        this.firstPersonControls.update(movementX, movementY, true);
+        
+        // Store current touch position for next move event
+        this.lastTouchX = touchX;
+        this.lastTouchY = touchY;
+      }
+    }, { passive: false });
+
+    gameCanvas.addEventListener('touchend', (e) => {
+      this.isTouchActive = false;
+    });
+    
+    // Make sure controls stay updated
+    this.scene.events.on('update', () => {
+      this.firstPersonControls.update(0, 0);
+    });
+  }
+
   setMobileController(mobileController) {
     this.mobileController = mobileController;
   }
@@ -72,20 +153,34 @@ export class PlayerController {
   update(time, delta) {
     if (!this.player) return;
     
-    // Update player position debug info
-    if (this.scene.debugMode && this.playerPosition) {
-      this.playerPosition.textContent = `Position: x=${this.player.position.x.toFixed(2)}, y=${this.player.position.y.toFixed(2)}, z=${this.player.position.z.toFixed(2)}`;
+    // Get direction from camera for debug info
+    const direction = new THREE.Vector3();
+    const rotation = this.scene.third.camera.getWorldDirection(direction);
+    const theta = Math.atan2(rotation.x, rotation.z);
+    
+    // Update debug info
+    if (this.scene.debugMode) {
+      // Player position debug info
+      if (this.playerPosition) {
+        this.playerPosition.textContent = `Position: x=${this.player.position.x.toFixed(2)}, y=${this.player.position.y.toFixed(2)}, z=${this.player.position.z.toFixed(2)}`;
+      }
+      
+      // Camera direction debug info
+      if (this.cameraDirection) {
+        this.cameraDirection.textContent = `Camera Direction: x=${direction.x.toFixed(2)}, y=${direction.y.toFixed(2)}, z=${direction.z.toFixed(2)}, θ=${theta.toFixed(2)}`;
+      }
+      
+      // Camera rotation debug info
+      if (this.cameraRotation) {
+        const euler = new THREE.Euler().setFromQuaternion(this.scene.third.camera.quaternion);
+        this.cameraRotation.textContent = `Camera Rotation: x=${(euler.x * 180 / Math.PI).toFixed(2)}°, y=${(euler.y * 180 / Math.PI).toFixed(2)}°, z=${(euler.z * 180 / Math.PI).toFixed(2)}°`;
+      }
     }
     
     // Calculate actual delta for smoother movement
     const dt = delta / 1000; // Convert to seconds
     const speed = 6 * dt; // Base speed (units per second)
     
-    // Get direction from camera
-    const direction = new THREE.Vector3();
-    const rotation = this.scene.third.camera.getWorldDirection(direction);
-    const theta = Math.atan2(rotation.x, rotation.z);
-
     // Flag to track if player moved this frame
     let playerMoved = false;
     let moveVector = new THREE.Vector3(0, 0, 0);
