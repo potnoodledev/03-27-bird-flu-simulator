@@ -10,7 +10,7 @@ export class ChickenManager {
     this.scene = scene;
     this.chickens = [];
     this.chickenModel = null;
-    this.chickenCount = 50;
+    this.chickenCount = 25;
     this.frameCount = 0;
   }
 
@@ -35,7 +35,7 @@ export class ChickenManager {
       chicken.rotation.y = Math.random() * Math.PI * 2;
       
       // Scale down the chicken
-      chicken.scale.set(0.5, 0.5, 0.5);
+      chicken.scale.set(1.5, 1.5, 1.5);
       
       // Set chicken properties
       chicken.userData.destructible = true;
