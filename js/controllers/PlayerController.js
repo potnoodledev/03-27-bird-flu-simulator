@@ -32,7 +32,7 @@ export class PlayerController {
     
     // Position player at the other end of the barn
     // The barn is 80 units long in Z direction with the entrance at the +Z side
-    this.player.position.set(0, 2, -40); // At the opposite end of the barn from the entrance
+    this.player.position.set(0, 2, -35); // At the opposite end of the barn from the entrance
     this.scene.third.add.existing(this.player);
     
     // Add first person controls with explicit update option

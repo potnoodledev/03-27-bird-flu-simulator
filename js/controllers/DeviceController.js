@@ -102,9 +102,9 @@ export class DeviceController {
       this.scene.chickensRemainingText.setFontSize(isSmallScreen ? '18px' : '24px');
     }
     
-    // Update red dot position - always centered
-    if (this.scene.redDot) {
-      this.scene.redDot.setPosition(this.scene.cameras.main.width / 2, this.scene.cameras.main.height / 2);
+    // Redraw crosshair - always centered
+    if (this.scene.crosshair) {
+      this.scene.drawCrosshair();
     }
     
     // Force camera to update with player position if it exists

@@ -403,9 +403,16 @@ export class MainScene extends Scene3D {
   }
   
   setupUI() {
-    // Add red dot crosshair
-    this.redDot = this.add.circle(this.cameras.main.width / 2, this.cameras.main.height / 2, 4, 0xff0000);
-    this.redDot.depth = 1;
+    // Create a crosshair container
+    const centerX = this.cameras.main.width / 2;
+    const centerY = this.cameras.main.height / 2;
+    
+    // Create the crosshair graphics object
+    this.crosshair = this.add.graphics();
+    this.crosshair.depth = 1;
+    
+    // Draw the crosshair (white circle with cross)
+    this.drawCrosshair();
     
     // Add UI for remaining chickens
     this.chickensRemainingText = this.add.text(10, 10, `Chickens: 50`, { 
@@ -417,6 +424,49 @@ export class MainScene extends Scene3D {
     });
     this.chickensRemainingText.setScrollFactor(0);
     this.chickensRemainingText.depth = 1000;
+  }
+  
+  drawCrosshair() {
+    const centerX = this.cameras.main.width / 2;
+    const centerY = this.cameras.main.height / 2;
+    const size = 30; // Size of the crosshair
+    
+    // Clear previous drawing
+    this.crosshair.clear();
+    
+    // Set line style (white)
+    this.crosshair.lineStyle(8, 0xFFFFFF, 1);
+    
+    // Draw circle
+    this.crosshair.strokeCircle(centerX, centerY, size);
+    
+    // Draw horizontal line
+    this.crosshair.beginPath();
+    this.crosshair.moveTo(centerX - size, centerY);
+    this.crosshair.lineTo(centerX - size/3, centerY);
+    this.crosshair.closePath();
+    this.crosshair.strokePath();
+
+    this.crosshair.beginPath();
+    this.crosshair.moveTo(centerX + size, centerY);
+    this.crosshair.lineTo(centerX + size/3, centerY);
+    this.crosshair.closePath();
+    this.crosshair.strokePath();
+
+
+    // Draw vertical line
+    this.crosshair.beginPath();
+    this.crosshair.moveTo(centerX, centerY - size);
+    this.crosshair.lineTo(centerX, centerY - size/3);
+    this.crosshair.closePath();
+    this.crosshair.strokePath();
+
+    this.crosshair.beginPath();
+    this.crosshair.moveTo(centerX, centerY + size);
+    this.crosshair.lineTo(centerX, centerY + size/3);
+    this.crosshair.closePath();
+    this.crosshair.strokePath();
+
   }
 
   postRender() {
@@ -475,14 +525,14 @@ export class MainScene extends Scene3D {
       const moveState = this.playerController.getMoveState();
       this.weaponController.updateRiflePosition(this.third.camera, moveState);
       
-      // Update aiming state (controls red dot visibility)
+      // Update aiming state (controls crosshair visibility)
       const isAiming = this.isMobile && this.mobileController ? 
         this.mobileController.getAimStatus() : 
         this.input.mousePointer.rightButtonDown();
       
-      // Toggle red dot based on aiming
-      if (this.redDot) {
-        this.redDot.alpha = isAiming ? 0 : 1;
+      // Toggle crosshair based on aiming
+      if (this.crosshair) {
+        this.crosshair.alpha = isAiming ? 0 : 1;
       }
       
       // Handle shooting for desktop
