@@ -24,6 +24,34 @@ export class PlayerController {
     this.isTouchActive = false;
     // Add a touch area flag to distinguish between joystick and camera areas
     this.touchIsRightSide = false;
+
+    // Isometric view state
+    this.isIsometricView = false;
+    this.originalCameraPosition = new THREE.Vector3();
+    this.originalCameraQuaternion = new THREE.Quaternion();
+    this.isometricPosition = new THREE.Vector3(50, 80, 80); // Position for isometric view
+    this.isometricLookAt = new THREE.Vector3(0, 0, -20);   // Point camera looks at (center of barn area)
+    this.playerMarker = null; // Will hold the mesh representing the player in isometric view
+    this.weaponController = null; // Initialize as null, will be set later
+    
+    // Isometric view camera controls
+    this.isoDragging = false;
+    this.isoStartPoint = new THREE.Vector2();
+    this.isoStartRotation = new THREE.Euler();
+    this.isoRotationSpeed = 0.01;
+    this.isoPanSpeed = 0.5;
+    this.isoZoomSpeed = 1.0;
+    this.isoMinZoom = 30;
+    this.isoMaxZoom = 150;
+    
+    // Store isometric camera orientation
+    this.isoOrbitRadius = 120; // Distance from target
+    this.isoOrbitTheta = Math.PI/4; // Horizontal angle
+    this.isoOrbitPhi = Math.PI/6;   // Vertical angle
+    
+    // Create chicken count element reference for displaying under it
+    this.chickenCountElement = null;
+    this.cameraInfoElement = null;
   }
 
   init() {
@@ -75,27 +103,95 @@ export class PlayerController {
       s: this.scene.input.keyboard.addKey('s'),
       d: this.scene.input.keyboard.addKey('d'),
       q: this.scene.input.keyboard.addKey('q'),
-      e: this.scene.input.keyboard.addKey('e')
+      e: this.scene.input.keyboard.addKey('e'),
+      z: this.scene.input.keyboard.addKey('z'), // Add Z key
+      arrowUp: this.scene.input.keyboard.addKey('UP'),
+      arrowDown: this.scene.input.keyboard.addKey('DOWN'),
+      arrowLeft: this.scene.input.keyboard.addKey('LEFT'),
+      arrowRight: this.scene.input.keyboard.addKey('RIGHT')
     };
     
+    // Store original camera state for toggling
+    this.originalCameraPosition.copy(this.scene.third.camera.position);
+    this.originalCameraQuaternion.copy(this.scene.third.camera.quaternion);
+    
+    // Create the camera info HUD element
+    this.createCameraInfoElement();
+
     return this.player;
+  }
+
+  createCameraInfoElement() {
+    // Find the chicken count element or create one if needed
+    this.chickenCountElement = document.querySelector('.chicken-goal');
+    
+    // Create camera info element
+    this.cameraInfoElement = document.createElement('div');
+    this.cameraInfoElement.id = 'camera-info';
+    this.cameraInfoElement.textContent = 'Camera: x=0, y=0, z=0, θ=0°, φ=0°';
+    
+    // Insert after chicken count
+    const infoText = document.getElementById('info-text');
+    if (infoText) {
+      infoText.appendChild(this.cameraInfoElement);
+    }
   }
 
   setupDesktopControls() {
     // Desktop controls
     // lock the pointer and update the first person control
-    this.scene.input.on('pointerdown', () => {
-      this.scene.input.mouse.requestPointerLock();
-    });
-    
-    this.scene.input.on('pointermove', pointer => {
-      if (this.scene.input.mouse.locked) {
-        this.firstPersonControls.update(pointer.movementX, pointer.movementY);
+    this.scene.input.on('pointerdown', (pointer) => {
+      if (this.isIsometricView) {
+        // Start isometric camera rotation/panning
+        this.isoDragging = true;
+        this.isoStartPoint.set(pointer.x, pointer.y);
+        
+        // Store camera rotation at the start of drag
+        this.isoStartRotation.copy(this.scene.third.camera.rotation);
+      } else {
+        this.scene.input.mouse.requestPointerLock();
       }
     });
     
+    this.scene.input.on('pointerup', () => {
+      // Stop isometric dragging
+      this.isoDragging = false;
+    });
+    
+    this.scene.input.on('pointermove', pointer => {
+      if (this.scene.input.mouse.locked && !this.isIsometricView) {
+        this.firstPersonControls.update(pointer.movementX, pointer.movementY);
+      } else if (this.isIsometricView && this.isoDragging) {
+        // Handle isometric view camera rotation with mouse
+        const deltaX = pointer.x - this.isoStartPoint.x;
+        const deltaY = pointer.y - this.isoStartPoint.y;
+        
+        if (pointer.rightButtonDown()) {
+          // Pan camera when right mouse button is held down
+          this.panIsometricCamera(deltaX, deltaY);
+        } else {
+          // Rotate camera when left mouse button is held down
+          this.rotateIsometricCamera(deltaX, deltaY);
+        }
+        
+        // Update start point for next movement
+        this.isoStartPoint.set(pointer.x, pointer.y);
+      }
+    });
+    
+    // Add mouse wheel zoom for isometric view
+    window.addEventListener('wheel', (event) => {
+      if (this.isIsometricView) {
+        const delta = -Math.sign(event.deltaY) * this.isoZoomSpeed * 5;
+        this.zoomIsometricCamera(delta);
+        event.preventDefault();
+      }
+    }, { passive: false });
+    
     this.scene.events.on('update', () => {
-      this.firstPersonControls.update(0, 0);
+        if (!this.isIsometricView) {
+           this.firstPersonControls.update(0, 0);
+        }
     });
   }
 
@@ -110,19 +206,26 @@ export class PlayerController {
       
       // Store initial touch position for calculating swipe movement
       if (e.touches.length >= 1) {
-        // Find the rightmost touch that isn't on the left third of the screen
-        // This allows the joystick (usually on left side) to work simultaneously
-        for (let i = 0; i < e.touches.length; i++) {
-          const touch = e.touches[i];
-          const touchX = touch.clientX;
-          
-          // Consider touch to be for camera control if it's on the right 2/3 of screen
-          if (touchX > gameCanvas.clientWidth / 3) {
-            this.lastTouchX = touchX;
-            this.lastTouchY = touch.clientY;
-            this.isTouchActive = true;
-            this.touchIsRightSide = true;
-            break;
+        if (this.isIsometricView) {
+          // For isometric view, use primary touch for camera control
+          this.isoDragging = true;
+          this.isoStartPoint.set(e.touches[0].clientX, e.touches[0].clientY);
+          this.isoStartRotation.copy(this.scene.third.camera.rotation);
+        } else {
+          // Find the rightmost touch that isn't on the left third of the screen
+          // This allows the joystick (usually on left side) to work simultaneously
+          for (let i = 0; i < e.touches.length; i++) {
+            const touch = e.touches[i];
+            const touchX = touch.clientX;
+            
+            // Consider touch to be for camera control if it's on the right 2/3 of screen
+            if (touchX > gameCanvas.clientWidth / 3) {
+              this.lastTouchX = touchX;
+              this.lastTouchY = touch.clientY;
+              this.isTouchActive = true;
+              this.touchIsRightSide = true;
+              break;
+            }
           }
         }
       }
@@ -132,8 +235,19 @@ export class PlayerController {
       // Prevent default to stop scrolling
       e.preventDefault();
       
-      // Look for the right-side touch that controls the camera
-      if (this.isTouchActive && this.touchIsRightSide) {
+      if (this.isIsometricView && this.isoDragging && e.touches.length >= 1) {
+        // Handle isometric camera control with touch
+        const touch = e.touches[0];
+        const deltaX = touch.clientX - this.isoStartPoint.x;
+        const deltaY = touch.clientY - this.isoStartPoint.y;
+        
+        // Use single-finger touches for rotation
+        this.rotateIsometricCamera(deltaX, deltaY);
+        
+        // Update start position for next move
+        this.isoStartPoint.set(touch.clientX, touch.clientY);
+      } else if (!this.isIsometricView && this.isTouchActive && this.touchIsRightSide) {
+        // Look for the right-side touch that controls the camera
         let foundActiveTouch = false;
         
         // Find the correct touch point (the one on the right side)
@@ -167,35 +281,251 @@ export class PlayerController {
     }, { passive: false });
 
     gameCanvas.addEventListener('touchend', (e) => {
-      // Check if there are any remaining touches on the right side
-      let rightSideTouchFound = false;
-      
-      for (let i = 0; i < e.touches.length; i++) {
-        if (e.touches[i].clientX > gameCanvas.clientWidth / 3) {
-          rightSideTouchFound = true;
-          break;
+      if (this.isIsometricView) {
+        // End dragging when all touches end
+        if (e.touches.length === 0) {
+          this.isoDragging = false;
+        }
+      } else {
+        // Check if there are any remaining touches on the right side
+        let rightSideTouchFound = false;
+        
+        for (let i = 0; i < e.touches.length; i++) {
+          if (e.touches[i].clientX > gameCanvas.clientWidth / 3) {
+            rightSideTouchFound = true;
+            break;
+          }
+        }
+        
+        // If no more touches on right side, deactivate camera control
+        if (!rightSideTouchFound) {
+          this.isTouchActive = false;
+          this.touchIsRightSide = false;
         }
       }
-      
-      // If no more touches on right side, deactivate camera control
-      if (!rightSideTouchFound) {
-        this.isTouchActive = false;
-        this.touchIsRightSide = false;
+    });
+    
+    // Handle pinch to zoom in isometric view
+    let initialPinchDistance = 0;
+    
+    gameCanvas.addEventListener('touchstart', (e) => {
+      if (this.isIsometricView && e.touches.length === 2) {
+        // Get initial distance between two fingers
+        initialPinchDistance = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+      }
+    });
+    
+    gameCanvas.addEventListener('touchmove', (e) => {
+      if (this.isIsometricView && e.touches.length === 2) {
+        // Calculate new distance between fingers
+        const currentDistance = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        
+        // Calculate zoom amount based on pinch gesture
+        if (initialPinchDistance > 0) {
+          const delta = (currentDistance - initialPinchDistance) * 0.1;
+          this.zoomIsometricCamera(delta);
+          
+          // Update initial distance for next move
+          initialPinchDistance = currentDistance;
+        }
       }
     });
     
     // Make sure controls stay updated
     this.scene.events.on('update', () => {
-      this.firstPersonControls.update(0, 0);
+      if (!this.isIsometricView) {
+           this.firstPersonControls.update(0, 0);
+       }
     });
+  }
+
+  // Rotate the isometric camera based on mouse/touch input
+  rotateIsometricCamera(deltaX, deltaY) {
+    // Update orbital angles
+    this.isoOrbitTheta -= deltaX * this.isoRotationSpeed * 0.01;
+    this.isoOrbitPhi = Math.max(0.1, Math.min(Math.PI/2 - 0.1, this.isoOrbitPhi - deltaY * this.isoRotationSpeed * 0.01));
+    
+    // Update camera position based on new angles
+    this.updateIsometricCameraPosition();
+  }
+  
+  // Pan the isometric camera based on mouse/touch input
+  panIsometricCamera(deltaX, deltaY) {
+    // Create vectors for camera's right and up directions
+    const right = new THREE.Vector3(1, 0, 0);
+    const up = new THREE.Vector3(0, 1, 0);
+    
+    // Apply camera rotation to these vectors
+    right.applyQuaternion(this.scene.third.camera.quaternion);
+    up.applyQuaternion(this.scene.third.camera.quaternion);
+    
+    // Remove any y component from right vector to keep panning level
+    right.y = 0;
+    right.normalize();
+    
+    // Scale vectors by delta movement and pan speed
+    right.multiplyScalar(-deltaX * this.isoPanSpeed * 0.1);
+    up.multiplyScalar(deltaY * this.isoPanSpeed * 0.1);
+    
+    // Move both the camera and lookAt target
+    this.isometricLookAt.add(right);
+    this.isometricLookAt.add(up);
+    
+    // Update camera position
+    this.updateIsometricCameraPosition();
+  }
+  
+  // Zoom the isometric camera in or out
+  zoomIsometricCamera(delta) {
+    // Adjust orbit radius based on delta, with min/max boundaries
+    this.isoOrbitRadius = Math.max(this.isoMinZoom, 
+                           Math.min(this.isoMaxZoom, 
+                           this.isoOrbitRadius - delta));
+    
+    // Update camera position
+    this.updateIsometricCameraPosition();
+  }
+  
+  // Update camera position based on current orbit params
+  updateIsometricCameraPosition() {
+    const camera = this.scene.third.camera;
+    
+    // Calculate camera position in spherical coordinates
+    const x = this.isoOrbitRadius * Math.sin(this.isoOrbitPhi) * Math.cos(this.isoOrbitTheta);
+    const y = this.isoOrbitRadius * Math.cos(this.isoOrbitPhi);
+    const z = this.isoOrbitRadius * Math.sin(this.isoOrbitPhi) * Math.sin(this.isoOrbitTheta);
+    
+    // Set camera position relative to look target
+    camera.position.set(
+      this.isometricLookAt.x + x,
+      this.isometricLookAt.y + y,
+      this.isometricLookAt.z + z
+    );
+    
+    // Look at the target
+    camera.lookAt(this.isometricLookAt);
+    camera.updateProjectionMatrix();
+    
+    // Update HUD with camera info
+    this.updateCameraInfoDisplay();
+  }
+  
+  // Update the camera information in the HUD
+  updateCameraInfoDisplay() {
+    const camera = this.scene.third.camera;
+    
+    // Format rotation angles in degrees
+    const rotX = (camera.rotation.x * 180 / Math.PI).toFixed(0);
+    const rotY = (camera.rotation.y * 180 / Math.PI).toFixed(0);
+    const rotZ = (camera.rotation.z * 180 / Math.PI).toFixed(0);
+    
+    // Format orbital angles in degrees
+    const orbitTheta = ((this.isoOrbitTheta * 180 / Math.PI) % 360).toFixed(0);
+    const orbitPhi = (this.isoOrbitPhi * 180 / Math.PI).toFixed(0);
+    
+    // Update HUD text
+    if (this.cameraInfoElement) {
+      this.cameraInfoElement.textContent = 
+        `Camera: x=${camera.position.x.toFixed(0)}, y=${camera.position.y.toFixed(0)}, z=${camera.position.z.toFixed(0)}, θ=${orbitTheta}°, φ=${orbitPhi}°`;
+    }
+    
+    // Also update debug panel if in debug mode
+    if (this.scene.debugMode) {
+      if (this.cameraDirection) {
+        const direction = new THREE.Vector3();
+        camera.getWorldDirection(direction);
+        this.cameraDirection.textContent = `Camera Direction: x=${direction.x.toFixed(2)}, y=${direction.y.toFixed(2)}, z=${direction.z.toFixed(2)}, θ=${orbitTheta}°`;
+      }
+      
+      if (this.cameraRotation) {
+        this.cameraRotation.textContent = `Camera Rotation: x=${rotX}°, y=${rotY}°, z=${rotZ}°`;
+      }
+    }
   }
 
   setMobileController(mobileController) {
     this.mobileController = mobileController;
   }
 
+  setWeaponController(weaponController) {
+    this.weaponController = weaponController;
+  }
+
   update(time, delta) {
     if (!this.player) return;
+    
+    // Check for 'Z' key press to toggle view BEFORE movement updates
+    // Use justDown to trigger only once per press
+    if (this.keys.z.isDown && !this.zKeyPressedLastFrame) {
+        this.toggleIsometricView();
+    }
+    this.zKeyPressedLastFrame = this.keys.z.isDown; // Track key state
+
+    // Handle keyboard controls for isometric camera
+    if (this.isIsometricView) {
+      // Rotation with arrow keys
+      const rotateAmount = 0.03;
+      if (this.keys.arrowLeft.isDown) {
+        this.isoOrbitTheta += rotateAmount;
+        this.updateIsometricCameraPosition();
+      }
+      if (this.keys.arrowRight.isDown) {
+        this.isoOrbitTheta -= rotateAmount;
+        this.updateIsometricCameraPosition();
+      }
+      if (this.keys.arrowUp.isDown) {
+        this.isoOrbitPhi = Math.max(0.1, this.isoOrbitPhi - rotateAmount);
+        this.updateIsometricCameraPosition();
+      }
+      if (this.keys.arrowDown.isDown) {
+        this.isoOrbitPhi = Math.min(Math.PI/2 - 0.1, this.isoOrbitPhi + rotateAmount);
+        this.updateIsometricCameraPosition();
+      }
+      
+      // Panning with WASD
+      const panAmount = 1.0;
+      if (this.keys.w.isDown) {
+        this.isometricLookAt.z -= panAmount;
+        this.updateIsometricCameraPosition();
+      }
+      if (this.keys.s.isDown) {
+        this.isometricLookAt.z += panAmount;
+        this.updateIsometricCameraPosition();
+      }
+      if (this.keys.a.isDown) {
+        this.isometricLookAt.x -= panAmount;
+        this.updateIsometricCameraPosition();
+      }
+      if (this.keys.d.isDown) {
+        this.isometricLookAt.x += panAmount;
+        this.updateIsometricCameraPosition();
+      }
+      
+      // Zoom with Q/E
+      const zoomAmount = 3.0;
+      if (this.keys.q.isDown) {
+        this.zoomIsometricCamera(zoomAmount); // Zoom in
+      }
+      if (this.keys.e.isDown) {
+        this.zoomIsometricCamera(-zoomAmount); // Zoom out
+      }
+      
+      // Update player marker position
+      if (this.playerMarker) {
+        this.playerMarker.position.copy(this.player.position);
+      }
+      
+      // Make sure camera info is updated
+      this.updateCameraInfoDisplay();
+      
+      return; // Exit update early
+    }
     
     // Get direction from camera for debug info
     const direction = new THREE.Vector3();
@@ -305,8 +635,10 @@ export class PlayerController {
       this.player.position.x += moveVector.x;
       this.player.position.z += moveVector.z;
       
-      // Force camera to update with player position
-      this.firstPersonControls.update(0, 0, true);
+      // Force camera to update with player position only if not isometric
+      if (!this.isIsometricView && this.firstPersonControls && this.firstPersonControls.enabled) {
+          this.firstPersonControls.update(0, 0, true);
+      }
     }
     
     // Update weapon sway based on movement
@@ -348,5 +680,79 @@ export class PlayerController {
   
   getControls() {
     return this.firstPersonControls;
+  }
+
+  toggleIsometricView() {
+    const camera = this.scene.third.camera;
+
+    if (!this.isIsometricView) {
+        // Switching TO isometric view
+        
+        // Create player marker if it doesn't exist
+        if (!this.playerMarker) {
+            const geometry = new THREE.SphereGeometry(1, 16, 16); // Simple sphere marker
+            const material = new THREE.MeshLambertMaterial({ color: 0xff0000 }); // Red color
+            this.playerMarker = new THREE.Mesh(geometry, material);
+            this.playerMarker.castShadow = true;
+            this.playerMarker.receiveShadow = true;
+            this.playerMarker.layers.set(1); // Set marker to layer 1
+            this.scene.third.add.existing(this.playerMarker);
+        }
+
+        // Store current first-person state BEFORE changing
+        this.originalCameraPosition.copy(this.player.position); // Store player position as reference
+        this.originalCameraQuaternion.copy(camera.quaternion);
+
+        // Set initial isometric target to look at the player
+        this.isometricLookAt.copy(this.player.position);
+        
+        // Initialize orbit parameters
+        this.isoOrbitRadius = 120;
+        this.isoOrbitTheta = Math.PI/4;  // 45 degrees
+        this.isoOrbitPhi = Math.PI/6;    // 30 degrees
+        
+        // Set camera position based on orbital parameters
+        this.updateIsometricCameraPosition();
+
+        // Disable first person controls and hide weapon, show marker
+        if (this.firstPersonControls) {
+            this.firstPersonControls.enabled = false;
+        }
+        if (this.weaponController && this.weaponController.getRifle()) {
+            this.weaponController.getRifle().visible = false;
+        }
+        if (this.playerMarker) {
+             this.playerMarker.position.copy(this.player.position); // Set initial position
+             this.playerMarker.visible = true;
+        }
+
+        this.isIsometricView = true;
+        console.log("Switched to Isometric View");
+    } else {
+        // Switching BACK to first-person view
+        // Restore camera position relative to the player
+        camera.position.copy(this.player.position); // Reset camera to player position
+        camera.quaternion.copy(this.originalCameraQuaternion); // Restore original rotation
+        camera.updateProjectionMatrix();
+
+        // Re-enable first person controls, show weapon, hide marker
+        if (this.firstPersonControls) {
+            this.firstPersonControls.enabled = true;
+             // Force update controls to sync camera with player immediately
+            this.firstPersonControls.update(0, 0, true);
+        }
+        if (this.weaponController && this.weaponController.getRifle()) {
+            this.weaponController.getRifle().visible = true;
+        }
+        if (this.playerMarker) {
+            this.playerMarker.visible = false;
+        }
+
+        this.isIsometricView = false;
+        console.log("Switched back to First-Person View");
+    }
+    
+    // Update HUD with camera info
+    this.updateCameraInfoDisplay();
   }
 } 

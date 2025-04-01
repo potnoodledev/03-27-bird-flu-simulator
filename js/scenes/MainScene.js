@@ -59,6 +59,9 @@ export class MainScene extends Scene3D {
     // Initialize weapon controller
     this.weaponController = new WeaponController(this);
     
+    // Pass weapon controller reference to player controller
+    this.playerController.setWeaponController(this.weaponController);
+    
     // Setup mobile controller if on mobile
     if (this.isMobile) {
       this.mobileController = new MobileController(this);

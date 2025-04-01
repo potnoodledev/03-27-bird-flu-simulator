@@ -212,14 +212,67 @@
           padding: 6px 12px;
         }
       }
+      
+      /* Chicken goal styles */
+      .chicken-goal {
+        display: block;
+        margin-top: 10px;
+        padding: 5px 10px;
+        background-color: rgba(139, 32, 160, 0.4);
+        border-radius: 15px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        font-weight: bold;
+      }
+      
+      @media (max-width: 768px) {
+        .chicken-goal {
+          margin-top: 8px;
+          padding: 4px 8px;
+        }
+      }
+      
+      @media (max-width: 375px) {
+        .chicken-goal {
+          margin-top: 6px;
+          padding: 3px 6px;
+        }
+      }
+      
+      /* Camera info styles */
+      #camera-info {
+        margin-top: 5px;
+        padding: 4px 8px;
+        background-color: rgba(0, 0, 0, 0.5);
+        border-radius: 10px;
+        display: inline-block;
+        font-size: 12px;
+        border: 1px solid rgba(139, 32, 160, 0.5);
+        font-family: 'Orbitron', monospace;
+        letter-spacing: -0.5px;
+      }
+      
+      @media (max-width: 768px) {
+        #camera-info {
+          font-size: 10px;
+          padding: 3px 6px;
+        }
+      }
+      
+      @media (max-width: 375px) {
+        #camera-info {
+          font-size: 9px;
+          padding: 2px 4px;
+        }
+      }
     </style>
   </head>
 
   <body>
     <div id="info-text">
       <span class="desktop-controls">WASD: move, Q/E: tilt, RMB: aim, LMB: shoot</span>
-      <span class="mobile-controls">Joystick: move, Swipe: look, Buttons: aim/shoot</span>
+      <span class="mobile-controls">Joystick: move, Swipe: look, Buttons: aim/shoot, Z: toggle isometric, Drag: rotate camera, Pinch: zoom</span>
       <span class="chicken-goal">Contain the outbreak! Hunt down all 50 infected chickens!</span>
+      <span class="isometric-controls">Z: toggle isometric, WASD: pan, Arrows: rotate, Q/E: zoom, Mouse: drag to rotate, RMB-drag: pan, Wheel: zoom</span>
     </div>
     
     <div id="mobile-controls">

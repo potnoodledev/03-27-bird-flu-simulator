@@ -46,6 +46,11 @@ export class WeaponController {
     });
   }
   
+  // Add a getter for the rifle object
+  getRifle() {
+    return this.rifle;
+  }
+
   updateRiflePosition(camera, moveState) {
     if (!this.rifle) return;
     
@@ -288,10 +293,6 @@ export class WeaponController {
     });
     
     return bullet;
-  }
-  
-  getRifle() {
-    return this.rifle;
   }
   
   getBullets() {

@@ -16,15 +16,24 @@ export class DeviceController {
     const mobileControls = document.getElementById('mobile-controls');
     const desktopControlsInfo = document.querySelector('.desktop-controls');
     const mobileControlsInfo = document.querySelector('.mobile-controls');
+    const isometricControlsInfo = document.querySelector('.isometric-controls');
     
     if (this.isMobile) {
       mobileControls.style.display = 'block';
       desktopControlsInfo.style.display = 'none';
       mobileControlsInfo.style.display = 'inline';
+      // Hide detailed isometric controls on mobile, these are included in mobile controls text
+      if (isometricControlsInfo) {
+        isometricControlsInfo.style.display = 'none';
+      }
     } else {
       mobileControls.style.display = 'none';
       desktopControlsInfo.style.display = 'inline';
       mobileControlsInfo.style.display = 'none';
+      // Show isometric controls on desktop
+      if (isometricControlsInfo) {
+        isometricControlsInfo.style.display = 'inline';
+      }
     }
     
     // Set debug panel visibility based on debug mode
